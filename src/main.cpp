@@ -21,6 +21,7 @@ int echoPin = 7;
 int trigPin = 8;
 
 int buttonPin = 2;
+int obstacleSwitchPin = 3;
 
 SoftwareSerial BT(BTRx, BTTx);
 Motors motors(motorsPins);
@@ -52,6 +53,8 @@ void calculatePID(int error, int Kp, int Kd, int *speedA, int *speedB);
 int readLightSensorDigital(int sensor);
 int getError(int *sensorsReadValue);
 void getBluetoothData(float *kp, float *ki, float *kd, int *speed);
+int checkEvent(int *lightSensorsValue, float distance);
+int getSensorsOnLine(int *sensorsReadValue);
 void interrupt();
 void save();
 
@@ -148,7 +151,7 @@ int checkEvent(int *lightSensorsValue, float distance) {
     event = LINE_INTERRUPTION;
   }
 
-  if (sensorsOnLine == numberLightSensors && previousEvent != OIL_SPOIL) {
+  if (sensorsOnLine == numberLightSensors) {
     event = OIL_SPOIL;
   }
 
