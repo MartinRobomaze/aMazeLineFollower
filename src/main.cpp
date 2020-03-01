@@ -3,6 +3,12 @@
 #include "EEPROM.h"
 #include "Motors.h"
 #include "LightSensor.h"
+#include "UltrasonicSensor.h"
+
+#define LINE_INTERRUPTION 1
+#define OIL_SPOIL 2
+#define OBSTACLE_FAR 3
+#define OBSTACLE 4
 
 // Motor and light sensor pins.
 int motorsPins[4] = {5, 10, 9, 6};
@@ -11,12 +17,17 @@ int lightSensorsPins[8] = {A0, A1, A2, A3, A4, A5, A6, A7};
 int numberLightSensors = 8;
 int BTRx = 12;
 int BTTx = 11;
+int echoPin = 7;
+int trigPin = 8;
 
 int buttonPin = 2;
 
 SoftwareSerial BT(BTRx, BTTx);
 Motors motors(motorsPins);
 LightSensor lightSensors[8];
+UltrasonicSensor USSensor(echoPin, trigPin);
+
+int previousEvent = 0;
 
 // Kp, Kd constants - you have to experiment with them to have good results.
 float Kp = 1;
@@ -74,12 +85,14 @@ void loop() {
   if (running) {
     // Light sensors readings array.
     int lightSensorsReading[numberLightSensors];
+    float distance = USSensor.getDistance();
 
     // Read light sensors.
     for (int i = 0; i < numberLightSensors; i++) {
       lightSensorsReading[i] = readLightSensorDigital(i);
     }
 
+    int event = checkEvent(lightSensorsReading, distance);
     // Get error based on the light sensors reading.
     int error = getError(lightSensorsReading);
     // Serial.println(error);
@@ -127,6 +140,25 @@ void loop() {
   previous = digitalRead(buttonPin);
 }
 
+int checkEvent(int *lightSensorsValue, float distance) {
+  int sensorsOnLine = getSensorsOnLine(lightSensorsValue);
+  int event = 0;
+
+  if (lastError < 2 && sensorsOnLine) {
+    event = LINE_INTERRUPTION;
+  }
+
+  if (sensorsOnLine == numberLightSensors && previousEvent != OIL_SPOIL) {
+    event = OIL_SPOIL;
+  }
+
+  if (distance < 15) {
+    event = OBSTACLE_FAR;
+  }
+
+  return event;
+}
+
 void calculatePID(int error, int Kp, int Kd, int *speedA, int *speedB) {
   // Proportional.
   int P = error;
@@ -156,6 +188,17 @@ int readLightSensorDigital(int sensor) {
     sensorValue = 0;
   }
   return sensorValue;
+}
+
+int getSensorsOnLine(int *sensorsReadValue) {
+  int count = 0;
+  for (int i = 0; i < numberLightSensors; i++) {
+    if (sensorsReadValue[i] == 1) {
+      count++;
+    }
+  }
+
+  return count;
 }
 
 int getError(int *sensorsReadValue) {
