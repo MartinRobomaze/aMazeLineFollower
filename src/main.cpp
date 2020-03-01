@@ -25,7 +25,11 @@ int obstacleSwitchPin = 3;
 
 SoftwareSerial BT(BTRx, BTTx);
 Motors motors(motorsPins);
-LightSensor lightSensors[8];
+LightSensor lightSensors[8] = {LightSensor(lightSensorsPins[0]), LightSensor(lightSensorsPins[1]),
+                                LightSensor(lightSensorsPins[2]), LightSensor(lightSensorsPins[3]),
+                                LightSensor(lightSensorsPins[4]), LightSensor(lightSensorsPins[5]),
+                                LightSensor(lightSensorsPins[6]), LightSensor(lightSensorsPins[7])};
+                                
 UltrasonicSensor USSensor(echoPin, trigPin);
 
 int previousEvent = 0;
