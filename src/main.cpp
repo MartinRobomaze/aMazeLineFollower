@@ -6,7 +6,7 @@
 #include "UltrasonicSensor.h"
 
 #define LINE_INTERRUPTION 1
-#define OIL_SPOIL 2
+#define OIL_SPILL 2
 #define OBSTACLE_FAR 3
 #define OBSTACLE 4
 
@@ -29,7 +29,7 @@ LightSensor lightSensors[8] = {LightSensor(lightSensorsPins[0]), LightSensor(lig
                                 LightSensor(lightSensorsPins[2]), LightSensor(lightSensorsPins[3]),
                                 LightSensor(lightSensorsPins[4]), LightSensor(lightSensorsPins[5]),
                                 LightSensor(lightSensorsPins[6]), LightSensor(lightSensorsPins[7])};
-                                
+
 UltrasonicSensor USSensor(echoPin, trigPin);
 
 int previousEvent = 0;
@@ -52,10 +52,12 @@ bool running = false;
 long time = 0;
 int debounce = 200;
 int previous = HIGH;
+bool obstacle = false;
+
 // Function declaration.
 void calculatePID(int error, int Kp, int Kd, int *speedA, int *speedB);
 int readLightSensorDigital(int sensor);
-int getError(int *sensorsReadValue);
+int getError(int *sensorsReadValue, char type);
 void getBluetoothData(float *kp, float *ki, float *kd, int *speed);
 int checkEvent(int *lightSensorsValue, float distance);
 int getSensorsOnLine(int *sensorsReadValue);
@@ -71,6 +73,7 @@ void setup() {
 
   // Start bluetooth communication.
   BT.begin(9600);
+  attachInterrupt(digitalPinToInterrupt(obstacleSwitchPin), interrupt, FALLING);
 
   // Setup light sensors.
   for (int i = 0; i < 8; i++) {
@@ -100,8 +103,57 @@ void loop() {
     }
 
     int event = checkEvent(lightSensorsReading, distance);
+
+    if (event == LINE_INTERRUPTION) {
+      while (!getSensorsOnLine(lightSensorsReading)) {
+        for (int i = 0; i < numberLightSensors; i++) {
+          lightSensorsReading[i] = readLightSensorDigital(i);
+        }
+
+        motors.forward(baseSpeed);
+      }
+    }
+
+    else if (event == OIL_SPILL) {
+      while (getSensorsOnLine(lightSensorsReading) > 1) {
+        for (int i = 0; i < numberLightSensors; i++) {
+          lightSensorsReading[i] = readLightSensorDigital(i);
+        }
+
+        // Get error based on the light sensors reading.
+        int error = getError(lightSensorsReading, 'C');
+        // Serial.println(error);
+
+        int speedA = 0;
+        int speedB = 0;
+
+        // Calculate PID value based on error and Kp and Kd constants.
+        calculatePID(error, Kp, Kd, &speedA, &speedB);
+
+        // Move motors with speeds returned by PID algorhitm.
+        motors.moveTank(speedA, speedB);
+      }
+    }
+
+    else if (event == OBSTACLE_FAR) {
+      baseSpeed -= 30;
+    }
+
+    else if (obstacle) {
+      motors.moveTank(-baseSpeed, baseSpeed);
+      delay(100);
+      while (!getSensorsOnLine(lightSensorsReading)) {
+        for (int i = 0; i < numberLightSensors; i++) {
+          lightSensorsReading[i] = readLightSensorDigital(i);
+        }
+
+        motors.moveTank(baseSpeed - 100, baseSpeed);
+      }
+      motors.forward(0);
+    }
+
     // Get error based on the light sensors reading.
-    int error = getError(lightSensorsReading);
+    int error = getError(lightSensorsReading, 'L');
     // Serial.println(error);
 
     int speedA = 0;
@@ -147,6 +199,10 @@ void loop() {
   previous = digitalRead(buttonPin);
 }
 
+void interrupt(void) {
+  obstacle = true;
+}
+
 int checkEvent(int *lightSensorsValue, float distance) {
   int sensorsOnLine = getSensorsOnLine(lightSensorsValue);
   int event = 0;
@@ -156,7 +212,7 @@ int checkEvent(int *lightSensorsValue, float distance) {
   }
 
   if (sensorsOnLine == numberLightSensors) {
-    event = OIL_SPOIL;
+    event = OIL_SPILL;
   }
 
   if (distance < 15) {
@@ -208,9 +264,12 @@ int getSensorsOnLine(int *sensorsReadValue) {
   return count;
 }
 
-int getError(int *sensorsReadValue) {
+int getError(int *sensorsReadValue, char type) {
   // Set error to -4.
   int error = 0;
+  if (type == 'C') {
+    int error = -4;
+  }
 
   for (int i = 0; i < numberLightSensors; i++) {
 
@@ -218,12 +277,20 @@ int getError(int *sensorsReadValue) {
     Serial.print("\t");
     // If sensor is black, increment error.
     if (sensorsReadValue[i] == 1) {
-      error = i - 4;
-      return error;
+      if (type == 'L') {
+        error = i - 4;
+        return error;
+      }
+
+      else if (type == 'C') {
+        error++;
+      }
     }
   }
 
-  error = -4;
+  if (type == 'L') {
+    error = -4;
+  }
 
   Serial.print("\n");
 
