@@ -268,7 +268,7 @@ int getError(int *sensorsReadValue, char type) {
   // Set error to -4.
   int error = 0;
   if (type == 'C') {
-    int error = -4;
+    error = -4;
   }
 
   for (int i = 0; i < numberLightSensors; i++) {
